@@ -1,0 +1,3 @@
+[submodule "modulo-componentes"]
+	path = modulo-componentes
+	url = https://github.com/ja1rocambole/modulo-componentes.git
