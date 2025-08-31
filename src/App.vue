@@ -1,6 +1,8 @@
 <script setup>
 import HelloWorld from './components/HelloWorld.vue'
 import TheWelcome from './components/TheWelcome.vue'
+
+import {BotaoEstilizado} from '../modulo-componentes/src/index.js';
 </script>
 
 <template>
@@ -14,6 +16,7 @@ import TheWelcome from './components/TheWelcome.vue'
 
   <main>
     <TheWelcome />
+    <BotaoEstilizado>Botao do submodule</BotaoEstilizado>
   </main>
 </template>
 
