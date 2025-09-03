@@ -1,54 +1,57 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 
-// Vamos importar nosso SIMULADOR por enquanto
-import { FakeSignalRConnection } from './services/fakeSignalR.js';
-
-// Importação real que usaríamos em produção (agora comentada)
-// import * as signalR from "@microsoft/signalr";
-
-const statusProcessamento = ref("Aguardando conexão...");
-const progresso = ref(0);
-let connection = null; // Variável para guardar nossa conexão
+const precoBitcoin = ref("Conectando...");
+const ultimaAtualizacao = ref(null);
+let socket = null; // Variável para guardar nossa conexão WebSocket
 
 onMounted(() => {
-  // --- INÍCIO DA LÓGICA DE CONEXÃO ---
+  // TODO: A lógica de conexão entrará aqui:
+  // 1. CRIAR A CONEXÃO WEBSOCKET
+  // Este é o endereço do feed público da Binance para o par Bitcoin/Real
+  const wsUrl = "wss://stream.binance.com:9443/ws/btcbrl@trade"
 
-  // USANDO O SIMULADOR:
-  connection = new FakeSignalRConnection();
+  // A mágica acontece aqui: criamos um novo objeto WebSocket
+  socket = new WebSocket(wsUrl)
 
-  /* // QUANDO FOSSE PARA PRODUÇÃO, TROCARÍAMOS A LINHA ACIMA POR ESTAS:
-  connection = new signalR.HubConnectionBuilder()
-    .withUrl("https://api.da.empresa.com/meuHubDeProcessamento")
-    .build();
-  */
+  // 2. DEFINIR O QUE ACONTECE QUANDO A CONEXÃO É ABERTA
+  socket.onopen = () => {
+    console.log("Conexão WebSocket aberta com a Binance!")
+    precoBitcoin.value = "Aguardando primeira atualização...";
+  }
 
-  // 2. OUVIR por um evento específico vindo do servidor
-  // O nome do evento ('StatusAtualizado') deve ser o mesmo que o backend envia
-  connection.on("StatusAtualizado", (novaMensagem, novoProgresso) => {
-    console.log("Recebido do servidor:", { novaMensagem, novoProgresso });
-    statusProcessamento.value = novaMensagem;
-    progresso.value = novoProgresso;
-  });
+  // 3. DEFINIR O QUE ACONTECE QUANDO UMA MENSAGEM CHEGA
+  // Esta função será chamada dezenas de vezes por minuto!
+  socket.onmessage = (event) => {
+    // A mensagem vem como uma string JSON, então precisamos convertê-la para um objeto
+    const data = JSON.parse(event.data)
 
-  // 3. INICIAR a conexão
-  connection.start()
-    .then(() => {
-      statusProcessamento.value = "Conectado! Aguardando início do processamento...";
-      
-      // 4. INVOCAR um método no servidor para entrar no grupo
-      connection.invoke("EntrarNoGrupoDoProcesso", "processo-id-123");
+    // Formatamos o preço para a moeda brasileira
+    const precoFormatado = parseFloat(data.p).toLocaleString('pt-BR', {
+      style: 'currency', currency: 'BRL'
     })
-    .catch(err => {
-      console.error("Falha na conexão:", err);
-      statusProcessamento.value = "Erro ao conectar.";
-    });
+
+    // Atualizamos nossas variáveis reativas, e o Vue cuida do resto
+    precoBitcoin.value = precoFormatado;
+    ultimaAtualizacao.value = new Date().toLocaleTimeString();
+  }
+
+  socket.onclose = () => {
+    console.log("Conexão WebSocket fechada.");
+    precoBitcoin.value = "Desconectado.";
+  };
+
+  socket.onerror = (error) => {
+    console.error("Error no WebSocket:", error);
+    precoBitcoin.value = "Erro na conexão.";
+  }
 });
 
-// 5. LIMPEZA: É muito importante fechar a conexão quando o componente não for mais necessário
+
 onUnmounted(() => {
-  if (connection) {
-    connection.stop();
+  // TODO: A lógica para fechar a conexão entrará aqui
+  if (socket) {
+    socket.close()
   }
 });
 </script>
@@ -56,56 +59,48 @@ onUnmounted(() => {
 <template>
   <div class="container">
     <header>
-      <h1>📡 Status do Processamento em Tempo Real</h1>
-      <p>Este componente está "ouvindo" eventos de um servidor simulado.</p>
+      <h1>🔴 Preço do Bitcoin em Tempo Real (via WebSocket)</h1>
+      <p>Conectado diretamente ao feed da Binance.</p>
     </header>
     <main>
-      <div class="status-card">
-        <h2>Status Atual:</h2>
-        <p class="status-message">{{ statusProcessamento }}</p>
-        <div class="progress-bar-container">
-          <div class="progress-bar" :style="{ width: progresso + '%' }"></div>
-        </div>
-        <p class="progress-text">{{ progresso }}%</p>
+      <div class="price-card">
+        <h2>BTC / BRL</h2>
+        <p class="price">{{ precoBitcoin }}</p>
+        <p class="timestamp" v-if="ultimaAtualizacao">
+          Última atualização: {{ ultimaAtualizacao }}
+        </p>
       </div>
     </main>
   </div>
 </template>
 
 <style scoped>
+/* (O mesmo CSS do exemplo anterior pode ser usado aqui, se quiser) */
 .container {
   font-family: sans-serif;
   max-width: 600px;
   margin: 40px auto;
   padding: 20px;
   text-align: center;
-  color: #333;
 }
-.status-card {
+
+.price-card {
   background-color: #f0f0f0;
   border-radius: 8px;
   padding: 20px;
   margin-top: 20px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
-.status-message {
-  font-size: 1.2em;
+
+.price {
+  font-size: 2.5em;
   font-weight: bold;
-  min-height: 30px;
+  margin: 10px 0;
+  color: #e85d04;
 }
-.progress-bar-container {
-  width: 100%;
-  background-color: #e0e0e0;
-  border-radius: 4px;
-  margin: 20px 0 10px;
-}
-.progress-bar {
-  height: 20px;
-  background-color: #42b983;
-  border-radius: 4px;
-  transition: width 0.5s ease-in-out;
-}
-.progress-text {
-  font-weight: bold;
+
+.timestamp {
+  font-size: 0.9em;
+  color: #666;
 }
 </style>
